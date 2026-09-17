@@ -1,0 +1,33 @@
+# Web 框架
+fastapi==0.136.1
+uvicorn==0.46.0
+python-multipart==0.0.28
+
+# 配置
+pydantic==2.13.4
+pydantic-settings==2.14.1
+python-dotenv==1.2.2
+
+# 数据库
+sqlalchemy==2.0.49
+asyncpg==0.31.0
+
+# 缓存 / 队列
+redis==7.4.0
+
+# 向量数据库
+pymilvus==3.0.0
+
+# 认证
+python-jose==3.5.0
+bcrypt==5.0.0
+
+# HTTP 客户端（调用嵌入服务、LLM）
+httpx==0.28.1
+openai==2.36.0
+
+# 文档解析
+pypdf==6.11.0
+
+# MinerU（PDF 高精度解析，依赖较重，按需安装）
+# mineru==3.1.15

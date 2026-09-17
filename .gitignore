@@ -1,0 +1,43 @@
+# ===== 敏感配置（含密钥、密码，绝不能上传）=====
+.env
+.env.dev
+.env.local
+.env.*.local
+
+# ===== 上传的文档（含个人简历、业务文档）=====
+uploads/
+app/uploads/
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+
+# ===== 模型文件（几个 G，不上传）=====
+PDF-Extract-Kit-1.0/
+models/
+
+# ===== 日志与临时文件 =====
+*.log
+logs/
+dump.rdb
+.idea/
+.vscode/
+
+# ===== Python 缓存 =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ===== 测试数据（含文档内容片段）=====
+app/test/
+*.jsonl
+
+# ===== 样例/测试文件（报告样例、测试 PDF）=====
+app/agent/report/报告生成.md
+app/scripts/md2word/报告生成.md
+app/scripts/md2word/报告生成.docx
+app/components/rag/全新嘉华用户手册.pdf
+app/scripts/parse-doc/docx/
