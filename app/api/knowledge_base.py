@@ -74,15 +74,14 @@ async def batch_delete_knowledge_base(
         doc_count = await DocumentDao.count(db, kb_id=kb_id)
         if doc_count > 0:
             warn_names.append(kb.kb_name)
-        else:
-            clean_ids.append(kb_id)
+        clean_ids.append(kb_id)
 
     msg_parts = []
     if clean_ids:
         await KnowledgeBaseDao.batch_delete(db, clean_ids)
         msg_parts.append(f"成功删除 {len(clean_ids)} 个知识库")
     if warn_names:
-        msg_parts.append(f"{'、'.join(warn_names)} 含有文档，不能删除")
+        msg_parts.append(f"其中 {'、'.join(warn_names)} 含有文档")
 
     return ResponseUtil.success(msg="；".join(msg_parts))
 
@@ -102,7 +101,7 @@ async def get_personal_list(
 @router.get("/scope")
 async def get_kb_by_scope(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:kb:list")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
     scope: str = "personal",
 ):
     rows = await KnowledgeBaseService.get_kb_list_by_scope(db, scope, user)

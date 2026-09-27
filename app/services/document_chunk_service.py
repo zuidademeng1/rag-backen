@@ -1,3 +1,4 @@
+import asyncio
 import json
 import tempfile
 
@@ -46,6 +47,11 @@ class DocumentChunkService:
         if str(doc.uploader_id) != str(user.user_id):
             raise HTTPException(status_code=403, detail="只能操作自己的文档")
 
+        # 已解析完成的文档跳过重复解析（防止重复点击解析导致重复向量化、冲垮嵌入服务）
+        if doc.chunk_status == "completed":
+            print(f"文档已解析完成，跳过重复解析: doc_id={doc_id}")
+            return {"doc_id": doc_id, "skipped": True}
+
         try:
             print("-------文档解析开始------------")
             # 2. 解析文档
@@ -70,7 +76,11 @@ class DocumentChunkService:
             # 3. 用 parser 解析，得到结构化 content_list
             parser = get_parser(parser_type)
             # 开发难题 TODO
-            content_list = parser.parse_document(
+            # 解析是同步阻塞操作（MinerU/Docling 会加载模型、跑子进程），
+            # 必须丢到线程池执行，否则会卡死 asyncio 事件循环，导致整个后端无法响应、
+            # 前端请求超时。参考 app/components/rag/doc_parse.py 的 run_in_executor 写法。
+            content_list = await asyncio.to_thread(
+                parser.parse_document,
                 file_path=file_path,
                 output_dir=tempfile.gettempdir(),  # 解析产物的输出目录
                 source="local",    # 使用本地模型

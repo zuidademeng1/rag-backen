@@ -99,6 +99,22 @@ async def get_doc_by_scope(
 
 
 """
+公共文档列表（全校公共库文档，学生可浏览）
+"""
+@router.get("/public")
+async def get_public_docs(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
+    kb_id: str = "",
+    page_num: int = 1,
+    page_size: int = 20,
+    keyword: str | None = None,
+):
+    rows, total = await DocumentService.get_public_doc_page(db, page_num, page_size, keyword, kb_id)
+    return ResponseUtil.paginate(rows=rows, total=total, page_num=page_num, page_size=page_size)
+
+
+"""
 删除文档
 """
 @router.delete("/{doc_id}")

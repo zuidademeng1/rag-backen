@@ -29,5 +29,6 @@ class KnowledgeBaseEntity(BaseModel):
     update_time: datetime | None = None
     remark: str | None = None
     del_flag: str | None = None
+    doc_count: int | None = Field(default=None, description="文档数量")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, alias_generator=to_camel)

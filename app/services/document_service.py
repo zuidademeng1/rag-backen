@@ -192,6 +192,21 @@ class DocumentService:
         ]
         return rows, total
 
+    @classmethod
+    async def get_public_doc_page(
+            cls, db: AsyncSession, page_num: int, page_size: int,
+            keyword: str | None = None, kb_id: str | None = None,
+    ) -> Tuple[list[dict], int]:
+        """分页查询公共知识库文档（学生浏览用，全校可见）"""
+        from app.dao.document_dao import DocumentDao
+        items, total = await DocumentDao.get_public_page(
+            db, page_num=page_num, page_size=page_size, keyword=keyword, kb_id=kb_id)
+        rows = [
+            DocumentEntity.model_validate(item).model_dump(by_alias=True, mode="json")
+            for item in items
+        ]
+        return rows, total
+
     """将文档解析任务推入 Redis 队列，后台 worker 异步执行。"""
     @staticmethod
     async def enqueue_parse_task(doc_id: str, user: CurrentUser) -> dict:

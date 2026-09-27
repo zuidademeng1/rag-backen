@@ -63,6 +63,7 @@ async def login(body: LoginRequest):
           AND m.status = '0'
     """)
     perms_result = await db.execute(perms_sql, {"uid": row.user_id})
+    # 提取权限列表
     permissions = [p.perms for p in perms_result.fetchall()]
 
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
@@ -116,15 +117,19 @@ def _build_menu_tree(menus: list[dict], parent_id: int = 0) -> list[RouteItem]:
         if m["parent_id"] != parent_id:
             continue
         children = _build_menu_tree(menus, m["menu_id"])
+        path = m["path"] or ""
+        # 顶层路由 path 必须以 "/" 开头，否则前端 Vue Router 动态注册会失败
+        if parent_id == 0 and path and not path.startswith("/"):
+            path = "/" + path
         item = RouteItem(
-            path=m["path"],
+            path=path,
             component=m["component"] if m["menu_type"] != "M" else None,
             name=m.get("route_name") or m["menu_name"],
             meta=RouteMeta(
                 title=m["menu_name"],
-                icon=m.get("icon", "#"),
+                icon=m.get("icon") or "#",
                 menu_type=m["menu_type"],
-                perms=m.get("perms", ""),
+                perms=m.get("perms") or "",
             ),
             children=children,
             redirect=children[0].path if children and m["menu_type"] == "M" else None,

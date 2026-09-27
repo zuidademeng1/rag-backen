@@ -60,6 +60,36 @@ class DocumentDao:
         return items, total
 
     @classmethod
+    async def get_public_page(cls, db: AsyncSession, page_num: int, page_size: int,
+                              keyword: str | None = None, kb_id: str | None = None) -> tuple[list[Document], int]:
+        """分页查询公共知识库文档（全校可见，不分部门）"""
+        from sqlalchemy import select, func
+        from app.models.knowledge_base import KnowledgeBase
+
+        base = (
+            select(Document)
+            .join(KnowledgeBase, Document.kb_id == KnowledgeBase.kb_id)
+            .where(
+                Document.del_flag == '0',
+                KnowledgeBase.public_flag == '1',
+                KnowledgeBase.del_flag == '0',
+            )
+        )
+        if keyword:
+            base = base.where(Document.file_name.ilike(f'%{keyword}%'))
+        if kb_id:
+            base = base.where(Document.kb_id == kb_id)
+
+        count_q = select(func.count()).select_from(base.subquery())
+        total = (await db.execute(count_q)).scalar() or 0
+
+        data_q = base.order_by(Document.upload_time.desc()).offset(
+            (page_num - 1) * page_size
+        ).limit(page_size)
+        items = list((await db.execute(data_q)).scalars().all())
+        return items, total
+
+    @classmethod
     async def add(cls, db: AsyncSession, document: Document) -> Document:
         """
         新增文档
@@ -145,10 +175,12 @@ class DocumentDao:
                 .where(Document.del_flag == '0', Document.uploader_id == user_id)
             )
         elif scope == 'public':
-            #公开范围是以知识库KnowledgeBase为单位的
-            conditions = [Document.del_flag == '0', KnowledgeBase.public_flag == '1']
-            if dept_id is not None:
-                conditions.append(KnowledgeBase.dept_id == str(dept_id))
+            #公开范围是以知识库KnowledgeBase为单位的（全校公开，不分部门）
+            conditions = [
+                Document.del_flag == '0',
+                KnowledgeBase.public_flag == '1',
+                KnowledgeBase.del_flag == '0',
+            ]
             base = (
                 select(Document)
                 .join(KnowledgeBase, Document.kb_id == KnowledgeBase.kb_id)

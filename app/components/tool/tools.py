@@ -41,7 +41,7 @@ register_tool(
     fn=rag_research,
     parameters={
         "query": {"type": "string", "description": "检索问题"},
-        "dept_id": {"type": "int", "description": "部门ID，用于数据隔离"},
+        "kb_ids": {"type": "array", "description": "知识库ID列表，为空查全部公共库"},
         "top_k": {"type": "int", "description": "返回结果数量"},
     },
 )

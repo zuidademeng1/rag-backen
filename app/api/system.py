@@ -76,6 +76,43 @@ async def user_list(
     return ResponseUtil.paginate(rows=result, total=total, page_num=query.page_num, page_size=query.page_size)
 
 
+@router.get("/user/deptTree")
+async def user_dept_tree(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("system:user:list")),
+):
+    """部门树（TreeSelect 格式，用于用户管理下拉选择）"""
+    sql = text("""
+        SELECT dept_id, parent_id, dept_name, order_num
+        FROM sys_dept
+        WHERE del_flag = '0'
+        ORDER BY order_num
+    """)
+    rows = (await db.execute(sql)).fetchall()
+    dicts = [dict(r._mapping) for r in rows]
+    tree = _build_tree_select(dicts, 0, "dept_id", "dept_name")
+    return ResponseUtil.success(data=tree)
+
+
+@router.put("/user/changeStatus")
+async def user_change_status(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("system:user:edit")),
+):
+    """修改用户状态（正常/停用）"""
+    user_id = body.get("userId")
+    status = body.get("status")
+    if user_id is None or status is None:
+        raise HTTPException(status_code=400, detail="参数缺失")
+    await db.execute(
+        text("UPDATE sys_user SET status = :st, update_time = now() WHERE user_id = :uid"),
+        {"st": status, "uid": user_id},
+    )
+    await db.commit()
+    return ResponseUtil.success(msg="更新成功")
+
+
 @router.get("/user/{user_id}")
 async def user_detail(
     user_id: int,
@@ -109,7 +146,7 @@ async def user_detail(
 async def user_add(
     body: UserCreate,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("system:user:add")),
+    user: CurrentUser = Depends(RequirePermission("system:user:add")),#需要管理员权限来新增用户
 ):
     # check unique
     check = await db.execute(text("SELECT user_id FROM sys_user WHERE user_name = :un AND del_flag = '0'"), {"un": body.user_name})
@@ -296,6 +333,25 @@ async def role_list(
     ).model_dump(by_alias=True, mode="json") for r in rows]
 
     return ResponseUtil.paginate(rows=result, total=total, page_num=query.page_num, page_size=query.page_size)
+
+
+@router.put("/role/changeStatus")
+async def role_change_status(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("system:role:edit")),
+):
+    """修改角色状态"""
+    role_id = body.get("roleId")
+    status = body.get("status")
+    if role_id is None or status is None:
+        raise HTTPException(status_code=400, detail="参数缺失")
+    await db.execute(
+        text("UPDATE sys_role SET status = :st, update_time = now() WHERE role_id = :rid"),
+        {"st": status, "rid": role_id},
+    )
+    await db.commit()
+    return ResponseUtil.success(msg="更新成功")
 
 
 @router.get("/role/{role_id}")
@@ -503,6 +559,45 @@ def _build_menu_entity_tree(menus: list[dict], parent_id: int) -> list:
         )
         result.append(entity.model_dump(by_alias=True, mode="json"))
     return result
+
+
+@router.get("/menu/treeselect")
+async def menu_tree_select(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("system:menu:list")),
+):
+    """菜单树（TreeSelect 格式，用于角色/菜单下拉选择）"""
+    sql = text("""
+        SELECT menu_id, menu_name, parent_id, order_num
+        FROM sys_menu
+        WHERE menu_type IN ('M', 'C') AND status = '0'
+        ORDER BY parent_id, order_num
+    """)
+    rows = (await db.execute(sql)).fetchall()
+    dicts = [dict(r._mapping) for r in rows]
+    tree = _build_tree_select(dicts, 0, "menu_id", "menu_name")
+    return ResponseUtil.success(data=tree)
+
+
+@router.get("/menu/roleMenuTreeselect/{role_id}")
+async def menu_role_tree_select(
+    role_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("system:menu:list")),
+):
+    """角色菜单树（含该角色已勾选的菜单）"""
+    menus_sql = text("""
+        SELECT menu_id, menu_name, parent_id, order_num
+        FROM sys_menu
+        WHERE menu_type IN ('M', 'C') AND status = '0'
+        ORDER BY parent_id, order_num
+    """)
+    menus = [dict(r._mapping) for r in (await db.execute(menus_sql)).fetchall()]
+    tree = _build_tree_select(menus, 0, "menu_id", "menu_name")
+
+    checked_sql = text("SELECT menu_id FROM sys_role_menu WHERE role_id = :rid")
+    checked_keys = [r[0] for r in (await db.execute(checked_sql, {"rid": role_id})).fetchall()]
+    return ResponseUtil.success(data={"menus": tree, "checkedKeys": checked_keys})
 
 
 @router.get("/menu/{menu_id}")
@@ -1137,6 +1232,27 @@ async def dict_data_list(
     return ResponseUtil.paginate(result, total, query.page_num, query.page_size)
 
 
+@router.get("/dict/data/type/{dict_type}")
+async def dict_data_by_type(
+    dict_type: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("system:dict:list")),
+):
+    """按字典类型查询字典数据（用于下拉框）"""
+    sql = text("""
+        SELECT dict_code, dict_sort, dict_label, dict_value, dict_type, is_default, status, create_time, remark
+        FROM sys_dict_data
+        WHERE dict_type = :dt AND status = '0'
+        ORDER BY dict_sort
+    """)
+    rows = (await db.execute(sql, {"dt": dict_type})).fetchall()
+    result = [
+        DictDataEntity(**r._asdict()).model_dump(by_alias=True, mode="json", exclude_none=True)
+        for r in rows
+    ]
+    return ResponseUtil.success(data=result)
+
+
 @router.get("/dict/data/{dict_code}")
 async def dict_data_detail(
     dict_code: int,
@@ -1220,3 +1336,34 @@ async def dict_data_delete(
     await db.execute(text("DELETE FROM sys_dict_data WHERE dict_code = :code"), {"code": dict_code})
     await db.commit()
     return ResponseUtil.success(msg="删除成功")
+
+
+# ======================== 参数配置 ========================
+
+def _build_tree_select(rows: list[dict], parent_id: int, id_key: str, label_key: str) -> list[dict]:
+    """把扁平列表递归构建成 {id, label, children} 树（TreeSelect 格式）"""
+    result = []
+    for r in rows:
+        if (r.get("parent_id") or 0) != parent_id:
+            continue
+        children = _build_tree_select(rows, r[id_key], id_key, label_key)
+        result.append({"id": r[id_key], "label": r[label_key], "children": children})
+    return result
+
+
+@router.get("/config/configKey/{config_key}")
+async def config_by_key(
+    config_key: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(RequirePermission("system:user:list")),
+):
+    """按 key 查询参数配置值（sys_config 表未建时返回默认值）"""
+    value = None
+    try:
+        sql = text("SELECT config_value FROM sys_config WHERE config_key = :key")
+        value = (await db.execute(sql, {"key": config_key})).scalar()
+    except Exception:
+        value = None
+    if value is None and config_key == "sys.user.initPassword":
+        value = "123456"
+    return ResponseUtil.success(data=value)

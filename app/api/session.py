@@ -19,7 +19,7 @@ router = APIRouter(prefix="/session", tags=["会话"])
 async def create_session(
     body: SessionCreateRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:chat:session")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
 ):
     result = await SessionService.create_session(db, body, user)
     return ResponseUtil.success(data=result)
@@ -28,7 +28,7 @@ async def create_session(
 @router.get("/list")
 async def list_sessions(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:chat:session")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
     page_num: int = 1,
     page_size: int = 10,
 ):
@@ -40,7 +40,7 @@ async def list_sessions(
 async def update_session(
     body: SessionUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:chat:session")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
 ):
     result = await SessionService.update_session(db, body, user)
     if result is None:
@@ -52,7 +52,7 @@ async def update_session(
 async def delete_session(
     session_id: str,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:chat:session")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
 ):
     ok = await SessionService.delete_session(db, session_id)
     if not ok:
@@ -64,7 +64,7 @@ async def delete_session(
 async def add_record(
     body: RecordAddRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:chat:session")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
 ):
     result = await SessionService.add_record(db, body, user)
     if result is None:
@@ -76,7 +76,7 @@ async def add_record(
 async def list_records(
     session_id: str,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:chat:session")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
 ):
     rows = await SessionService.get_records(db, session_id)
     return ResponseUtil.success(data=rows)

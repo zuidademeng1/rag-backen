@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 from app.core.database import get_db
 from app.core.permission import RequirePermission
 from app.dao.session_dao import SessionDao
-from app.schemas.chat import ChatRequest, RagChatRequest
+from app.schemas.chat import ChatRequest, RagChatRequest, StopRequest
 from app.services.chat_service import ChatWithLLMService
 from app.utils.auth_util import AuthUtil, CurrentUser
 from app.utils.response_util import ResponseUtil
@@ -46,7 +46,7 @@ async def chat_stream(
 async def chat_rag_stream(
     body: RagChatRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(RequirePermission("ai:chat:rag")),
+    user: CurrentUser = Depends(RequirePermission("ai:chat:talk")),
 ):
     session = await SessionDao.get_by_id(db, body.session_id)
     if not session:
@@ -72,7 +72,7 @@ async def chat_rag_stream(
 
 @router.post("/stop")
 async def chat_stop(
-    body: ChatRequest,
+    body: StopRequest,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(AuthUtil.get_current_user),
 ):
