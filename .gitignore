@@ -15,7 +15,7 @@ env/
 
 # ===== 模型文件（几个 G，不上传）=====
 PDF-Extract-Kit-1.0/
-models/
+/models/
 
 # ===== 日志与临时文件 =====
 *.log
