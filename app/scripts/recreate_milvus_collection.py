@@ -34,6 +34,8 @@ def recreate():
     schema.add_field(field_name="filename", datatype=DataType.VARCHAR, max_length=256)
     schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=65535)
     schema.add_field(field_name="chunk_index", datatype=DataType.INT64)
+    schema.add_field(field_name="section", datatype=DataType.VARCHAR, max_length=256, nullable=True)
+    schema.add_field(field_name="effective_date", datatype=DataType.VARCHAR, max_length=64, nullable=True)
     schema.add_field(field_name="dept_id", datatype=DataType.VARCHAR, max_length=256, nullable=True)
     schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=settings.milvus_dimension)
     schema.add_field(field_name="sparse_vector", datatype=DataType.SPARSE_FLOAT_VECTOR)

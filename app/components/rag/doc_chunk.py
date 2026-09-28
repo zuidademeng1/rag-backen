@@ -1,99 +1,87 @@
 import re
-from typing import List
 
 """
-切块
+切块：条款优先切分
+
+制度文件通常有「第X章」「第X条」结构，按条款切分能让检索更精准、
+并且能追溯到具体条款号（section）。无条款结构的文档回退固定长度切分。
 """
-# def chunk_by_paragraph(text: str, chunk_overlap: int = 50) -> list[str]:
-#     """
-#     按段落切块，支持块间重叠
-#     """
-#     if not text or not text.strip():
-#         return []
-#
-#     # 预处理：将连续非空行合并为段落（解决PDF单\n换行问题）
-#     lines = text.split('\n')
-#     paras = []
-#     buf = []
-#     for line in lines:
-#         if line.strip():
-#             buf.append(line.strip())
-#         else:
-#             if buf:
-#                 paras.append(''.join(buf))
-#                 buf = []
-#     if buf:
-#         paras.append(''.join(buf))
-#
-#     paragraphs = [p for p in paras if p.strip()]
-#
-#     if not paragraphs:
-#         return []
-#
-#     if chunk_overlap <= 0:
-#         return list(paragraphs)
-#
-#     result = []
-#     for i, para in enumerate(paragraphs):
-#         overlap_parts = []
-#         accumulated = 0
-#         for j in range(i - 1, -1, -1):
-#             prev = paragraphs[j]
-#             needed = chunk_overlap - accumulated
-#             if needed <= 0:
-#                 break
-#             if len(prev) <= needed:
-#                 overlap_parts.insert(0, prev)
-#                 accumulated += len(prev)
-#             else:
-#                 overlap_parts.insert(0, prev[-needed:])
-#                 accumulated += needed
-#                 break
-#
-#         if overlap_parts:
-#             overlap_text = '\n\n'.join(overlap_parts)
-#             content = overlap_text + '\n\n' + para
-#         else:
-#             content = para
-#         result.append(content)
-#     return result
+
+# 条款/章节边界：第X条 / 第X章 / 第X节（X 为中文或阿拉伯数字）
+_BOUNDARY_RE = re.compile(r'第([一二三四五六七八九十百千万零〇\d]+)([章节条])')
+
+# 固定长度切分时找句子边界的结束符
+_SENTENCE_ENDS = ['。', '！', '？', '.', '!', '?', '\n']
 
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-    """
-    将文本切分成块
-    Args:
-        text: 原始文本
-        chunk_size: 每块大小
-        overlap: 重叠大小
-    Returns:
-        文本块列表
-    """
+def _fixed_chunk(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """固定长度切分（作为无条款结构/超长条款时的回退）"""
     if not text:
         return []
-
     chunks = []
     start = 0
-
     while start < len(text):
-        end = start + chunk_size#先按固定长度切
+        end = start + chunk_size
         chunk = text[start:end]
-
-        # 尝试在句子边界切分
-        #保证每个分块语义完整，不跨句子
         if end < len(text):
-            for sep in ['。', '！', '？', '.', '!   ', '?', '\n']:
-                last_sep = chunk.rfind(sep)#在块里找最后一个句子符号
-                if last_sep > chunk_size // 2:#这个符号要在块的后半段
-                    chunk = chunk[:last_sep + 1]#从块头切到这个符号
+            for sep in _SENTENCE_ENDS:
+                last_sep = chunk.rfind(sep)
+                if last_sep > chunk_size // 2:
+                    chunk = chunk[:last_sep + 1]
                     end = start + last_sep + 1
                     break
-
         if chunk.strip():
             chunks.append(chunk.strip())
-
         start = end - overlap
-
     return chunks
 
 
+def _emit(body: str, section: str, chunk_size: int, overlap: int) -> list[dict]:
+    """把一段正文按长度切成块，并附上 section 标签"""
+    if not body:
+        return []
+    if len(body) <= chunk_size:
+        return [{"content": body, "section": section}]
+    return [{"content": c, "section": section} for c in _fixed_chunk(body, chunk_size, overlap)]
+
+
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[dict]:
+    """将文本按「条款优先」切分成块。
+
+    Returns:
+        list[dict]: 每项 {"content": str, "section": str}
+        section 形如「第一章 第一条」，无条款结构时为 ""
+    """
+    if not text or not text.strip():
+        return []
+
+    boundaries = list(_BOUNDARY_RE.finditer(text))
+    if not boundaries:
+        # 无条款结构，回退固定长度切分
+        return [{"content": c, "section": ""} for c in _fixed_chunk(text, chunk_size, overlap)]
+
+    result = []
+    current_chapter = ""
+
+    for i, m in enumerate(boundaries):
+        start = m.start()
+        end = boundaries[i + 1].start() if i + 1 < len(boundaries) else len(text)
+        seg = text[start:end].strip()
+        if not seg:
+            continue
+
+        heading = f"第{m.group(1)}{m.group(2)}"
+        kind = m.group(2)
+
+        if kind in ("章", "节"):
+            # 章节标题段：只更新当前章节标记；若标题后还跟了实质内容，也切出来
+            current_chapter = heading
+            if len(seg) > 20:
+                result.extend(_emit(seg, heading, chunk_size, overlap))
+            continue
+
+        # 条款（条）
+        section = f"{current_chapter} {heading}".strip() if current_chapter else heading
+        result.extend(_emit(seg, section, chunk_size, overlap))
+
+    return result

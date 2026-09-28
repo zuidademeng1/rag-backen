@@ -112,6 +112,12 @@ class ChatWithLLMService:
         # 2. 加载历史记录作为上下文
         records = await SessionService.get_records(db, session_id)
 
+        # 3. RAG 检索前：检查是否已被停止
+        if await RedisClient.exists(f"chat:stop:{session_id}"):
+            await RedisClient.delete(f"chat:stop:{session_id}")
+            yield f"data: {json.dumps({'done': True, 'stopped': True}, ensure_ascii=False)}\n\n"
+            return
+
         # 3. RAG 检索知识库
         # TODO: 调用 rag_research 从知识库召回相关文档片段
         context_chunks = await rag_research(
@@ -123,7 +129,13 @@ class ChatWithLLMService:
         print("---------RAG检索结果------------")
         print(context_chunks)
 
-        # 3.5 透出来源（先于 token 发出，前端渲染「来源」）
+        # 3.5 检索后再次检查停止信号（用户在检索期间点了停止）
+        if await RedisClient.exists(f"chat:stop:{session_id}"):
+            await RedisClient.delete(f"chat:stop:{session_id}")
+            yield f"data: {json.dumps({'done': True, 'stopped': True}, ensure_ascii=False)}\n\n"
+            return
+
+        # 3.6 透出来源（先于 token 发出，前端渲染「来源」）
         sources = [
             {
                 "doc_id": c.get("doc_id"),

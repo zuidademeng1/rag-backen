@@ -1,11 +1,11 @@
 import asyncio
 import json
+import re
 import tempfile
 
 from fastapi import HTTPException
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
-from torch._dynamo import source
 
 from app.components.rag.doc_chunk import chunk_text
 from app.components.rag.parser import get_parser
@@ -34,6 +34,14 @@ def _to_text(value) -> str:
     if isinstance(value, (list, tuple)):
         return "\n".join(_to_text(v) for v in value)
     return str(value)
+
+
+def _extract_effective_date(file_name: str) -> str:
+    """从文件名解析生效年份，如「2025-学生手册.pdf」→「2025」，解析不到返回空串"""
+    if not file_name:
+        return ""
+    m = re.search(r'(20\d{2})', file_name)
+    return m.group(1) if m else ""
 
 
 class DocumentChunkService:
@@ -115,31 +123,36 @@ class DocumentChunkService:
                 raise HTTPException(status_code=400, detail="文档内容为空，无法切块")
             print("-------文档解析完成------------")
 
-            # 3. 切块
+            # 3. 切块（条款优先，返回 [{content, section}]）
             print("-------切块开始------------")
             chunks = chunk_text(full_text)
             if not chunks:
                 raise HTTPException(status_code=400, detail="文档内容为空，无法切块")
             print("-------切块完成------------")
+
+            # 生效日期：从文件名解析年份
+            effective_date = _extract_effective_date(doc.file_name)
+
             # 4. 保存切块到数据库
             chunk_records = []
-            #enumerate 是 Python 内置函数，遍历列表的同时，自动给你一个递增的下标。它把每个元素变成 (下标, 元素) 的元组，下标从0开始
-            for i, content in enumerate(chunks):
+            for i, chunk in enumerate(chunks):
+                content = chunk["content"]
                 record = DocumentChunk(
                     chunk_id=generate_fast_id(),
                     doc_id=doc_id,
                     chunk_index=i,
                     content=content,
+                    section=chunk.get("section") or "",
                     char_count=len(content),
                     dept_id=str(user.dept_id) if user.dept_id is not None else None,
                 )
                 chunk_records.append(record)
             print("-------切块保存到数据库------------")
             await DocumentChunkDao.batch_insert(db, chunk_records)
-            print("-------切块保存到数据库------------")
             print("-------开始向量化------------")
             # 5. 向量化（稠密 + 稀疏）
-            dense_vectors, sparse_vectors = await embed_texts_hybrid(chunks)
+            contents = [c["content"] for c in chunks]
+            dense_vectors, sparse_vectors = await embed_texts_hybrid(contents)
             print("-------向量化完成------------")
             # 6. 存入Milvus
             client = MilvusClient.get_client()
@@ -148,9 +161,11 @@ class DocumentChunkService:
                     "id": chunk_records[i].chunk_id,
                     "kb_id": doc.kb_id,
                     "doc_id": doc_id,
-                    "filename":doc.file_name,
-                    "content": chunks[i],
+                    "filename": doc.file_name,
+                    "content": chunks[i]["content"],
                     "chunk_index": i,
+                    "section": chunks[i].get("section") or "",
+                    "effective_date": effective_date,
                     "dept_id": str(user.dept_id) if user.dept_id is not None else None,
                     "vector": dense_vectors[i],
                     "sparse_vector": sparse_vectors[i],
